@@ -1,9 +1,11 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hello",
-    page_icon="👋",
+    page_title="Streamlit CRM AI App Demo",
+    page_icon="assets/squadbase_icon.png",
 )
+
+st.logo('assets/squadbase.png', link='https://squadbase.dev', icon_image='assets/squadbase_icon.png')
 
 st.write("# Welcome to Streamlit! 👋")
 
