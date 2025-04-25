@@ -37,9 +37,9 @@ def fetch_notes(page_size: int = 20) -> pd.DataFrame:
     all_rows = []
 
     while True:
-        res = requests.get(url, headers={"Authorization": f"Bearer {attio_api_key}", "Content-Type": "application/json"}, params=params, timeout=30)
-        res.raise_for_status()                 # 4xx/5xx は例外
-        payload = res.json()                   # {"data":[…], "next_cursor": "...", "has_more": true}
+        list_notes = requests.get(url, headers={"Authorization": f"Bearer {attio_api_key}", "Content-Type": "application/json"}, params=params, timeout=30)
+        list_notes.raise_for_status()                 # 4xx/5xx は例外
+        payload = list_notes.json()                   # {"data":[…], "next_cursor": "...", "has_more": true}
         all_rows.extend(payload["data"])
 
         # --- ページング ---
@@ -50,21 +50,16 @@ def fetch_notes(page_size: int = 20) -> pd.DataFrame:
 
     # --- DataFrame 化 & 一部の列だけ残す ---
     df = pd.json_normalize(all_rows)
-    useful_cols = [c for c in [
-        "id", "title", "content", "parent_object",
-        "parent_record_id", "created_at", "creator.name"
-    ] if c in df.columns]
-    return df[useful_cols]
+    return df
 
-@st.dialog("Knowledge")
+@st.dialog("Knowledge", width='large')
 def knowledge_dialog():
     st.markdown(SYSTEM_PROMPT)
 
-@st.dialog("Data connections")
+@st.dialog("Data connections", width='large')
 def data_connections_dialog():
     st.write("## Retrieve Notes from Attio")
-    notes_df = fetch_notes()
-    st.dataframe(notes_df)
+    st.dataframe(st.session_state.notes_df)
 
 with st.sidebar:
     st.write("""
@@ -88,6 +83,16 @@ if "messages" not in st.session_state:
     st.session_state["messages"] = []
 if "system" not in st.session_state:
     st.session_state.system = {"role": "system", "content": SYSTEM_PROMPT}
+if "notes_df" not in st.session_state:
+    st.session_state.notes_df = fetch_notes()
+
+def messagify_notes_df(notes_df: pd.DataFrame) -> str:
+    markdown_list = notes_df["content_markdown"].tolist()
+    combined_md = "\n\n".join(
+        f"## note {i+1}\n{md}"
+        for i, md in enumerate(markdown_list)
+    )
+    return combined_md
 
 def send_message(message: str):
     if not openai_api_key:
@@ -101,7 +106,7 @@ def send_message(message: str):
     st.chat_message("user").write(message)
 
     response = client.chat.completions.create(
-        messages=[st.session_state.system] + st.session_state.messages,
+        messages=[st.session_state.system, {"role": "system", "content": "# Recent meeting logs\n\n" + messagify_notes_df(st.session_state.notes_df)}] + st.session_state.messages,
         model="o3",
     )
     msg = response.choices[0].message
@@ -119,5 +124,7 @@ if len(st.session_state.messages) == 0:
         send_message("Which company should we approach?")
     if st.button("What is the ideal proposal storyline?", use_container_width=True):
         send_message("What is the ideal proposal storyline?")
+    if st.button("Based on meeting logs, what are the characteristics of a successful business meeting?", use_container_width=True):
+        send_message("Based on meeting logs, what are the characteristics of a successful business meeting?")
 if prompt := st.chat_input():
     send_message(prompt)
