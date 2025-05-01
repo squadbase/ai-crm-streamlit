@@ -147,6 +147,23 @@ else:
             if 'title' in filtered_notes.columns and 'created_at' in filtered_notes.columns:
                 display_df = filtered_notes[['title', 'created_at']].copy()
                 display_df['created_at'] = pd.to_datetime(display_df['created_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
+                
+                if 'parent_object' in filtered_notes.columns and 'parent_record_id' in filtered_notes.columns:
+                    display_df['company'] = None
+                    
+                    # Create a mapping of record IDs to company names
+                    company_names = {}
+                    for i, (_, row) in enumerate(filtered_notes.iterrows()):
+                        if row.get('parent_object') == 'companies' and row.get('parent_record_id'):
+                            if row['parent_record_id'] not in company_names:
+                                company_name = get_company_name(row['parent_record_id'])
+                                if company_name:
+                                    company_names[row['parent_record_id']] = company_name
+                    
+                    for i, (idx, row) in enumerate(filtered_notes.iterrows()):
+                        if row.get('parent_object') == 'companies' and row.get('parent_record_id') in company_names:
+                            display_df.at[idx, 'company'] = company_names[row['parent_record_id']]
+                
                 st.dataframe(display_df)
             else:
                 st.dataframe(filtered_notes)
