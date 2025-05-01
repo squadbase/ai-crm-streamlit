@@ -7,6 +7,34 @@ from datetime import datetime, timedelta
 attio_api_key = os.environ.get("ATTIO_ACCESS_TOKEN")
 ATTIO_API_BASE = "https://api.attio.com/v2"
 
+def get_company_name(record_id):
+    """
+    Fetch company name using the record ID
+    
+    Args:
+        record_id: Company record ID
+        
+    Returns:
+        Company name or None if not found
+    """
+    url = f"{ATTIO_API_BASE}/objects/companies/records/{record_id}"
+    response = requests.get(
+        url, 
+        headers={
+            "Authorization": f"Bearer {attio_api_key}", 
+            "Content-Type": "application/json"
+        }, 
+        timeout=30
+    )
+    
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("data") and data["data"].get("values") and data["data"]["values"].get("name"):
+            for name_entry in data["data"]["values"]["name"]:
+                if name_entry.get("value"):
+                    return name_entry["value"]
+    return None
+
 st.logo('assets/squadbase.png', link='https://squadbase.dev', icon_image='assets/squadbase_icon.png')
 st.title("Notes Dashboard")
 st.write("View the total number of notes created within a selected date range.")
@@ -96,13 +124,46 @@ else:
     st.subheader("Notes Summary")
     st.metric("Total Notes", len(filtered_notes))
     
-    st.write(f"Showing notes created between {start_date} and {end_date}")
+    company_info = ""
+    if not filtered_notes.empty and 'parent_object' in filtered_notes.columns:
+        company_notes = filtered_notes[filtered_notes['parent_object'] == 'companies']
+        if not company_notes.empty and 'parent_record_id' in company_notes.columns:
+            company_ids = company_notes['parent_record_id'].unique()
+            company_names = []
+            
+            # Fetch company names
+            for company_id in company_ids:
+                company_name = get_company_name(company_id)
+                if company_name:
+                    company_names.append(company_name)
+            
+            if company_names:
+                company_info = f" for companies: {', '.join(company_names)}"
+    
+    st.write(f"Showing notes created between {start_date} and {end_date}{company_info}")
     
     with st.expander("View Notes Details"):
         if not filtered_notes.empty:
             if 'title' in filtered_notes.columns and 'created_at' in filtered_notes.columns:
                 display_df = filtered_notes[['title', 'created_at']].copy()
                 display_df['created_at'] = pd.to_datetime(display_df['created_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
+                
+                if 'parent_object' in filtered_notes.columns and 'parent_record_id' in filtered_notes.columns:
+                    display_df['company'] = None
+                    
+                    # Create a mapping of record IDs to company names
+                    company_names = {}
+                    for i, (_, row) in enumerate(filtered_notes.iterrows()):
+                        if row.get('parent_object') == 'companies' and row.get('parent_record_id'):
+                            if row['parent_record_id'] not in company_names:
+                                company_name = get_company_name(row['parent_record_id'])
+                                if company_name:
+                                    company_names[row['parent_record_id']] = company_name
+                    
+                    for i, (idx, row) in enumerate(filtered_notes.iterrows()):
+                        if row.get('parent_object') == 'companies' and row.get('parent_record_id') in company_names:
+                            display_df.at[idx, 'company'] = company_names[row['parent_record_id']]
+                
                 st.dataframe(display_df)
             else:
                 st.dataframe(filtered_notes)
