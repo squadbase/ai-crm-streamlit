@@ -1,4 +1,5 @@
-import os, pathlib
+import os
+import pathlib
 import streamlit as st
 import pandas as pd
 import requests
@@ -9,46 +10,54 @@ load_dotenv('.env')
 
 openai_api_key = os.environ.get("OPENAI_API_KEY")
 attio_api_key = os.environ.get("ATTIO_ACCESS_TOKEN")
-ATTIO_API_BASE   = "https://api.attio.com/v2"
+ATTIO_API_BASE = "https://api.attio.com/v2"
 KNOWLEDGE_DIR = pathlib.Path("knowledge")
 
 st.logo('assets/squadbase.png', link='https://squadbase.dev', icon_image='assets/squadbase_icon.png')
 
 @st.cache_resource(show_spinner=False)
 def load_all_markdown() -> str:
-    """/knowledge 以下の *.md を再帰的に読み込んで連結して返す"""
+    """Recursively read all *.md files under the knowledge directory and concatenate them."""
     md_files = sorted(KNOWLEDGE_DIR.rglob("*.md"))
     if not md_files:
         return "# Knowledge base is empty!"
 
     contents = []
     for path in md_files:
-        contents.append(f"<!-- {path.relative_to(KNOWLEDGE_DIR)} --> \n")
+        contents.append(f"<!-- {path.relative_to(KNOWLEDGE_DIR)} -->\n")
         contents.append(path.read_text(encoding="utf-8"))
         contents.append("\n\n")
     return "".join(contents)
 
 SYSTEM_PROMPT = load_all_markdown()
 
-@st.cache_data(ttl=300)   # 5 分キャッシュ
+@st.cache_data(ttl=300)   # 5-minute cache
 def fetch_notes(page_size: int = 20) -> pd.DataFrame:
-    url      = f"{ATTIO_API_BASE}/notes"
-    params   = {"limit": page_size}
+    url = f"{ATTIO_API_BASE}/notes"
+    params = {"limit": page_size}
     all_rows = []
 
     while True:
-        list_notes = requests.get(url, headers={"Authorization": f"Bearer {attio_api_key}", "Content-Type": "application/json"}, params=params, timeout=30)
-        list_notes.raise_for_status()                 # 4xx/5xx は例外
-        payload = list_notes.json()                   # {"data":[…], "next_cursor": "...", "has_more": true}
+        response = requests.get(
+            url,
+            headers={
+                "Authorization": f"Bearer {attio_api_key}",
+                "Content-Type": "application/json"
+            },
+            params=params,
+            timeout=30
+        )
+        response.raise_for_status()  # Raise exception for 4xx/5xx responses
+        payload = response.json()    # {"data":[…], "next_cursor": "...", "has_more": true}
         all_rows.extend(payload["data"])
 
-        # --- ページング ---
+        # --- Pagination ---
         if payload.get("has_more") and payload.get("next_cursor"):
             params["page[after]"] = payload["next_cursor"]
         else:
             break
 
-    # --- DataFrame 化 & 一部の列だけ残す ---
+    # --- Convert to DataFrame & keep relevant columns ---
     df = pd.json_normalize(all_rows)
     return df
 
@@ -98,15 +107,16 @@ def send_message(message: str):
     if not openai_api_key:
         st.info("Please add your OpenAI API key to continue.")
         st.stop()
-    client = OpenAI(
-        api_key=openai_api_key,
-    )
+    client = OpenAI(api_key=openai_api_key)
     user_message = {"role": "user", "content": message}
     st.session_state.messages.append(user_message)
     st.chat_message("user").write(message)
 
     response = client.chat.completions.create(
-        messages=[st.session_state.system, {"role": "system", "content": "# Recent meeting logs\n\n" + messagify_notes_df(st.session_state.notes_df)}] + st.session_state.messages,
+        messages=[
+            st.session_state.system,
+            {"role": "system", "content": "# Recent meeting logs\n\n" + messagify_notes_df(st.session_state.notes_df)}
+        ] + st.session_state.messages,
         model="o3",
     )
     msg = response.choices[0].message
@@ -120,10 +130,10 @@ for msg in st.session_state.messages:
 
 if len(st.session_state.messages) == 0:
     st.write("### Starting questions")
-    if st.button("Which company should we approach?", use_container_width=True):
-        send_message("Which company should we approach?")
-    if st.button("What is the ideal proposal storyline?", use_container_width=True):
-        send_message("What is the ideal proposal storyline?")
+    if st.button("Which industry / company should we approach next?", use_container_width=True):
+        send_message("Which industry / company should we approach next?")
+    if st.button("What is the ideal proposal storyline to sell to Squadbase?", use_container_width=True):
+        send_message("What is the ideal proposal storyline to sell to Squadbase?")
     if st.button("Based on meeting logs, what are the characteristics of a successful business meeting?", use_container_width=True):
         send_message("Based on meeting logs, what are the characteristics of a successful business meeting?")
 if prompt := st.chat_input():

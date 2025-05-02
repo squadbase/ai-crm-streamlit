@@ -1,28 +1,23 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="Streamlit CRM AI App Demo",
+    page_title="Squadbase x Streamlit Demo",
     page_icon="assets/squadbase_icon.png",
 )
 
 st.logo('assets/squadbase.png', link='https://squadbase.dev', icon_image='assets/squadbase_icon.png')
 
-st.write("# Welcome to Streamlit! 👋")
+st.write("# Welcome to Squadbase x Streamlit Demo! 🚀")
 
 st.markdown(
     """
-    Streamlit is an open-source app framework built specifically for
-    Machine Learning and Data Science projects.
+    This is a demo application of Squadbase x Streamlit to showcase how AI apps can empower you.
+    
     **👈 Select a demo from the sidebar** to see some examples
-    of what Streamlit can do!
+    of what AI apps can do!
+
     ### Want to learn more?
-    - Check out [streamlit.io](https://streamlit.io)
-    - Jump into our [documentation](https://docs.streamlit.io)
-    - Ask a question in our [community
-        forums](https://discuss.streamlit.io)
-    ### See more complex demos
-    - Use a neural net to [analyze the Udacity Self-driving Car Image
-        Dataset](https://github.com/streamlit/demo-self-driving)
-    - Explore a [New York City rideshare dataset](https://github.com/streamlit/demo-uber-nyc-pickups)
+    - Check out [our website](https://squadbase.dev)
+    - Jump into our [documentation](https://squadbase.dev/docs)
 """
 )
